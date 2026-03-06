@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Circular & State Pins KML Generator</title>
+    <title>Circular Pins KML Generator</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -52,8 +52,6 @@
         }
         input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,122,255,.2); outline: none; }
         textarea { min-height: 110px; resize: vertical; }
-        select[multiple] { height: 200px; }
-        .hidden { display: none !important; }
         .btn {
             background: var(--primary);
             color: white;
@@ -86,51 +84,32 @@
 </head>
 <body>
     <div class="container">
-        <h1>Circular / State Pins KML Generator</h1>
-        <p class="subtitle">Place pins in a circle or randomly inside selected states/provinces</p>
+        <h1>Circular Pins KML Generator</h1>
+        <p class="subtitle">Evenly spaced pins on a circle – perfect for Google My Maps citations</p>
 
         <form id="kmlForm">
             <div class="form-grid">
-                <div class="form-group" id="centerLatGroup">
-                    <label for="centerLat" title="Only used in circle modes">Center Latitude</label>
+                <div class="form-group">
+                    <label for="centerLat">Center Latitude</label>
                     <input type="number" id="centerLat" step="any" required placeholder="23.8103">
                 </div>
-                <div class="form-group" id="centerLngGroup">
-                    <label for="centerLng" title="Only used in circle modes">Center Longitude</label>
+                <div class="form-group">
+                    <label for="centerLng">Center Longitude</label>
                     <input type="number" id="centerLng" step="any" required placeholder="90.4125">
                 </div>
-                <div class="form-group" id="radiusGroup">
-                    <label for="radius" title="Only used in circle modes">Radius (km)</label>
+                <div class="form-group">
+                    <label for="radius">Radius (km)</label>
                     <input type="number" id="radius" min="0.01" step="any" required placeholder="2.5">
                 </div>
                 <div class="form-group">
-                    <label for="pinAmount" title="Number of pins to generate">Number of Pins</label>
+                    <label for="pinAmount">Number of Pins</label>
                     <input type="number" id="pinAmount" min="1" max="1000" required placeholder="12">
                 </div>
                 <div class="form-group">
-                    <label for="placementMode" title="Circle = around center | State = inside selected state">Placement Mode</label>
+                    <label for="placementMode">Placement Mode</label>
                     <select id="placementMode">
-                        <option value="angular" selected>Equal Angles (circle)</option>
-                        <option value="chord">Equal Chord Distance (circle)</option>
-                        <option value="state">State Mode (inside state)</option>
-                    </select>
-                </div>
-
-                <div class="form-group hidden" id="stateGroup">
-                    <label for="selectedState" title="Pins will be placed randomly inside the chosen state">Select State / Province</label>
-                    <select id="selectedState">
-                        <option value="">-- Choose one --</option>
-                        <option value="BD-Dhaka:23.5,90.3,24.1,90.6">Bangladesh – Dhaka Division</option>
-                        <option value="BD-Chittagong:21.0,91.0,23.0,92.5">Bangladesh – Chittagong Division</option>
-                        <option value="US-CA:32.5,-124.5,42.0,-114.0">United States – California</option>
-                        <option value="US-TX:25.8,-106.6,36.5,-93.5">United States – Texas</option>
-                        <option value="US-NY:40.5,-79.8,45.0,-71.8">United States – New York</option>
-                        <option value="IN-UP:23.8,77.0,30.4,84.5">India – Uttar Pradesh</option>
-                        <option value="IN-MH:15.6,72.6,22.0,80.9">India – Maharashtra</option>
-                        <option value="CN-GD:20.0,109.0,25.5,117.0">China – Guangdong</option>
-                        <option value="RU-MOW:55.0,36.5,56.5,38.5">Russia – Moscow Oblast</option>
-                        <option value="BR-SP:-25.0,-53.0,-19.5,-44.0">Brazil – São Paulo</option>
-                        <!-- Add more bounding boxes as needed: label:minLat,minLng,maxLat,maxLng -->
+                        <option value="angular" selected>Equal Angles (fast & very uniform)</option>
+                        <option value="chord">Equal Chord Distance (most equal neighbor spacing)</option>
                     </select>
                 </div>
             </div>
@@ -158,22 +137,6 @@
     </div>
 
     <script>
-        // Toggle visibility based on mode
-        document.getElementById('placementMode').addEventListener('change', function() {
-            const isState = this.value === 'state';
-            document.getElementById('stateGroup').classList.toggle('hidden', !isState);
-            ['centerLatGroup','centerLngGroup','radiusGroup'].forEach(id => {
-                document.getElementById(id).classList.toggle('hidden', isState);
-            });
-        });
-
-        // Simple random point inside bounding box
-        function randomInBox(minLat, minLng, maxLat, maxLng) {
-            const lat = minLat + Math.random() * (maxLat - minLat);
-            const lng = minLng + Math.random() * (maxLng - minLng);
-            return { lat, lon: lng };
-        }
-
         function destinationPoint(lat, lon, bearing, distance) {
             const R = 6371;
             const d = distance / R;
@@ -202,73 +165,44 @@
                     return;
                 }
 
-                let placemarks = '';
-
+                const centerLat = parseFloat(document.getElementById('centerLat').value);
+                const centerLng = parseFloat(document.getElementById('centerLng').value);
+                const radius = parseFloat(document.getElementById('radius').value);
                 const pinAmount = parseInt(document.getElementById('pinAmount').value);
-                if (isNaN(pinAmount) || pinAmount < 1) {
-                    alert('Number of Pins must be at least 1.');
+
+                if ([centerLat, centerLng, radius, pinAmount].some(isNaN)) {
+                    alert('Please fill all fields with valid numbers.');
                     btn.classList.remove('loading');
                     return;
                 }
 
-                if (mode === 'state') {
-                    const stateSelect = document.getElementById('selectedState');
-                    if (!stateSelect.value) {
-                        alert('Please select a state/province.');
-                        btn.classList.remove('loading');
-                        return;
-                    }
+                if (pinAmount < 1 || radius <= 0) {
+                    alert('Number of pins ≥ 1 and radius > 0.');
+                    btn.classList.remove('loading');
+                    return;
+                }
 
-                    const [minLat, minLng, maxLat, maxLng] = stateSelect.value.split(':')[1].split(',').map(Number);
+                let placemarks = '';
+                const angleStep = 360 / pinAmount;
 
-                    for (let i = 0; i < pinAmount; i++) {
-                        const pos = randomInBox(minLat, minLng, maxLat, maxLng);
-                        placemarks += `
+                for (let i = 0; i < pinAmount; i++) {
+                    const bearing = i * angleStep;
+                    const pos = destinationPoint(centerLat, centerLng, bearing, radius);
+                    placemarks += `
     <Placemark>
-        <name>${pinName} #${i+1}</name>
+        <name>${pinName}</name>
         <description><![CDATA[${desc}]]></description>
         <Point>
             <coordinates>${pos.lon.toFixed(6)},${pos.lat.toFixed(6)},0</coordinates>
         </Point>
     </Placemark>`;
-                    }
-                } else {
-                    // Circle modes
-                    const centerLat = parseFloat(document.getElementById('centerLat').value);
-                    const centerLng = parseFloat(document.getElementById('centerLng').value);
-                    const radius = parseFloat(document.getElementById('radius').value);
-
-                    if ([centerLat, centerLng, radius].some(isNaN)) {
-                        alert('Please fill Center Latitude, Longitude and Radius.');
-                        btn.classList.remove('loading');
-                        return;
-                    }
-                    if (radius <= 0) {
-                        alert('Radius must be positive.');
-                        btn.classList.remove('loading');
-                        return;
-                    }
-
-                    const angleStep = 360 / pinAmount;
-                    for (let i = 0; i < pinAmount; i++) {
-                        const bearing = i * angleStep;
-                        const pos = destinationPoint(centerLat, centerLng, bearing, radius);
-                        placemarks += `
-    <Placemark>
-        <name>${pinName} #${i+1}</name>
-        <description><![CDATA[${desc}]]></description>
-        <Point>
-            <coordinates>${pos.lon.toFixed(6)},${pos.lat.toFixed(6)},0</coordinates>
-        </Point>
-    </Placemark>`;
-                    }
                 }
 
                 const kml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
     <Document>
-        <name>${pinName} – ${mode === 'state' ? 'State Mode' : 'Circle'}</name>
-        <description>Generated pins for citations</description>
+        <name>${pinName} - Circular (${mode === 'angular' ? 'Equal Angles' : 'Equal Chords'})</name>
+        <description>Generated circular pin placement for citations</description>
         ${placemarks}
     </Document>
 </kml>`;
@@ -288,5 +222,4 @@
         }
     </script>
 </body>
-
 </html>
