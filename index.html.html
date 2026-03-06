@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circular & State Pins KML Generator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f0f12;
+            --card-bg: rgba(30, 30, 40, 0.6);
+            --glass: rgba(255, 255, 255, 0.08);
+            --border: rgba(255, 255, 255, 0.12);
+            --text: #e0e0e0;
+            --text-muted: #aaaaaa;
+            --primary: #007aff;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 2rem;
+            background-image:
+                radial-gradient(circle at 10% 20%, rgba(0,122,255,.15) 0%, transparent 20%),
+                radial-gradient(circle at 90% 80%, rgba(50,215,75,.15) 0%, transparent 20%);
+        }
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            backdrop-filter: blur(24px);
+            border-radius: 24px;
+            padding: 2.5rem;
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow);
+        }
+        h1 { text-align: center; font-size: 2.2rem; margin-bottom: 0.5rem; background: linear-gradient(135deg, #fff, #aaa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { text-align: center; color: var(--text-muted); margin-bottom: 2.5rem; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 1.5rem; }
+        .form-group { display: flex; flex-direction: column; }
+        label { font-size: 0.9rem; font-weight: 500; margin-bottom: 0.6rem; color: var(--text-muted); cursor: help; }
+        input, textarea, select {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 0.9rem 1.2rem;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+        }
+        input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(0,122,255,.2); outline: none; }
+        textarea { min-height: 110px; resize: vertical; }
+        select[multiple] { height: 200px; }
+        .hidden { display: none !important; }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 1.5rem;
+            position: relative;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,122,255,0.25); }
+        .btn.loading { background: rgba(0,122,255,0.7); pointer-events: none; }
+        .spinner {
+            position: absolute;
+            left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            width: 24px; height: 24px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top: 3px solid white;
+            border-radius: 50%;
+            opacity: 0;
+            animation: spin 1s linear infinite;
+        }
+        .btn.loading .spinner { opacity: 1; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } .container { padding: 1.8rem; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Circular / State Pins KML Generator</h1>
+        <p class="subtitle">Place pins in a circle or randomly inside selected states/provinces</p>
+
+        <form id="kmlForm">
+            <div class="form-grid">
+                <div class="form-group" id="centerLatGroup">
+                    <label for="centerLat" title="Only used in circle modes">Center Latitude</label>
+                    <input type="number" id="centerLat" step="any" required placeholder="23.8103">
+                </div>
+                <div class="form-group" id="centerLngGroup">
+                    <label for="centerLng" title="Only used in circle modes">Center Longitude</label>
+                    <input type="number" id="centerLng" step="any" required placeholder="90.4125">
+                </div>
+                <div class="form-group" id="radiusGroup">
+                    <label for="radius" title="Only used in circle modes">Radius (km)</label>
+                    <input type="number" id="radius" min="0.01" step="any" required placeholder="2.5">
+                </div>
+                <div class="form-group">
+                    <label for="pinAmount" title="Number of pins to generate">Number of Pins</label>
+                    <input type="number" id="pinAmount" min="1" max="1000" required placeholder="12">
+                </div>
+                <div class="form-group">
+                    <label for="placementMode" title="Circle = around center | State = inside selected state">Placement Mode</label>
+                    <select id="placementMode">
+                        <option value="angular" selected>Equal Angles (circle)</option>
+                        <option value="chord">Equal Chord Distance (circle)</option>
+                        <option value="state">State Mode (inside state)</option>
+                    </select>
+                </div>
+
+                <div class="form-group hidden" id="stateGroup">
+                    <label for="selectedState" title="Pins will be placed randomly inside the chosen state">Select State / Province</label>
+                    <select id="selectedState">
+                        <option value="">-- Choose one --</option>
+                        <option value="BD-Dhaka:23.5,90.3,24.1,90.6">Bangladesh – Dhaka Division</option>
+                        <option value="BD-Chittagong:21.0,91.0,23.0,92.5">Bangladesh – Chittagong Division</option>
+                        <option value="US-CA:32.5,-124.5,42.0,-114.0">United States – California</option>
+                        <option value="US-TX:25.8,-106.6,36.5,-93.5">United States – Texas</option>
+                        <option value="US-NY:40.5,-79.8,45.0,-71.8">United States – New York</option>
+                        <option value="IN-UP:23.8,77.0,30.4,84.5">India – Uttar Pradesh</option>
+                        <option value="IN-MH:15.6,72.6,22.0,80.9">India – Maharashtra</option>
+                        <option value="CN-GD:20.0,109.0,25.5,117.0">China – Guangdong</option>
+                        <option value="RU-MOW:55.0,36.5,56.5,38.5">Russia – Moscow Oblast</option>
+                        <option value="BR-SP:-25.0,-53.0,-19.5,-44.0">Brazil – São Paulo</option>
+                        <!-- Add more bounding boxes as needed: label:minLat,minLng,maxLat,maxLng -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="pinName">Pin Name (applied to all)</label>
+                <input type="text" id="pinName" required placeholder="My Business">
+            </div>
+
+            <div class="form-group">
+                <label for="pinDescription">Description (applied to all)</label>
+                <textarea id="pinDescription" required placeholder="My Business | Savar, Dhaka | +88017..."></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="fileName">Output File Name</label>
+                <input type="text" id="fileName" value="citations" required placeholder="my-citations">
+            </div>
+
+            <button type="button" class="btn" id="generateBtn" onclick="generateKML()">
+                <span>Generate & Download KML</span>
+                <div class="spinner"></div>
+            </button>
+        </form>
+    </div>
+
+    <script>
+        // Toggle visibility based on mode
+        document.getElementById('placementMode').addEventListener('change', function() {
+            const isState = this.value === 'state';
+            document.getElementById('stateGroup').classList.toggle('hidden', !isState);
+            ['centerLatGroup','centerLngGroup','radiusGroup'].forEach(id => {
+                document.getElementById(id).classList.toggle('hidden', isState);
+            });
+        });
+
+        // Simple random point inside bounding box
+        function randomInBox(minLat, minLng, maxLat, maxLng) {
+            const lat = minLat + Math.random() * (maxLat - minLat);
+            const lng = minLng + Math.random() * (maxLng - minLng);
+            return { lat, lon: lng };
+        }
+
+        function destinationPoint(lat, lon, bearing, distance) {
+            const R = 6371;
+            const d = distance / R;
+            const brng = bearing * Math.PI / 180;
+            lat = lat * Math.PI / 180;
+            lon = lon * Math.PI / 180;
+            const lat2 = Math.asin(Math.sin(lat) * Math.cos(d) + Math.cos(lat) * Math.sin(d) * Math.cos(brng));
+            const lon2 = lon + Math.atan2(Math.sin(brng) * Math.sin(d) * Math.cos(lat),
+                                          Math.cos(d) - Math.sin(lat) * Math.sin(lat2));
+            return { lat: lat2 * 180 / Math.PI, lon: lon2 * 180 / Math.PI };
+        }
+
+        function generateKML() {
+            const btn = document.getElementById('generateBtn');
+            btn.classList.add('loading');
+
+            setTimeout(() => {
+                const mode = document.getElementById('placementMode').value;
+                const pinName = document.getElementById('pinName').value.trim();
+                const desc = document.getElementById('pinDescription').value.trim();
+                let fileName = document.getElementById('fileName').value.trim() || 'citations';
+
+                if (!pinName || !desc) {
+                    alert('Please fill Pin Name and Description.');
+                    btn.classList.remove('loading');
+                    return;
+                }
+
+                let placemarks = '';
+
+                const pinAmount = parseInt(document.getElementById('pinAmount').value);
+                if (isNaN(pinAmount) || pinAmount < 1) {
+                    alert('Number of Pins must be at least 1.');
+                    btn.classList.remove('loading');
+                    return;
+                }
+
+                if (mode === 'state') {
+                    const stateSelect = document.getElementById('selectedState');
+                    if (!stateSelect.value) {
+                        alert('Please select a state/province.');
+                        btn.classList.remove('loading');
+                        return;
+                    }
+
+                    const [minLat, minLng, maxLat, maxLng] = stateSelect.value.split(':')[1].split(',').map(Number);
+
+                    for (let i = 0; i < pinAmount; i++) {
+                        const pos = randomInBox(minLat, minLng, maxLat, maxLng);
+                        placemarks += `
+    <Placemark>
+        <name>${pinName} #${i+1}</name>
+        <description><![CDATA[${desc}]]></description>
+        <Point>
+            <coordinates>${pos.lon.toFixed(6)},${pos.lat.toFixed(6)},0</coordinates>
+        </Point>
+    </Placemark>`;
+                    }
+                } else {
+                    // Circle modes
+                    const centerLat = parseFloat(document.getElementById('centerLat').value);
+                    const centerLng = parseFloat(document.getElementById('centerLng').value);
+                    const radius = parseFloat(document.getElementById('radius').value);
+
+                    if ([centerLat, centerLng, radius].some(isNaN)) {
+                        alert('Please fill Center Latitude, Longitude and Radius.');
+                        btn.classList.remove('loading');
+                        return;
+                    }
+                    if (radius <= 0) {
+                        alert('Radius must be positive.');
+                        btn.classList.remove('loading');
+                        return;
+                    }
+
+                    const angleStep = 360 / pinAmount;
+                    for (let i = 0; i < pinAmount; i++) {
+                        const bearing = i * angleStep;
+                        const pos = destinationPoint(centerLat, centerLng, bearing, radius);
+                        placemarks += `
+    <Placemark>
+        <name>${pinName} #${i+1}</name>
+        <description><![CDATA[${desc}]]></description>
+        <Point>
+            <coordinates>${pos.lon.toFixed(6)},${pos.lat.toFixed(6)},0</coordinates>
+        </Point>
+    </Placemark>`;
+                    }
+                }
+
+                const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+    <Document>
+        <name>${pinName} – ${mode === 'state' ? 'State Mode' : 'Circle'}</name>
+        <description>Generated pins for citations</description>
+        ${placemarks}
+    </Document>
+</kml>`;
+
+                const blob = new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName.replace(/[^a-z0-9]/gi, '_') + '.kml';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                btn.classList.remove('loading');
+            }, 900);
+        }
+    </script>
+</body>
+</html>
